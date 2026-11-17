@@ -6,7 +6,7 @@ VERIFAI is a research-backed screening tool for estimating whether an image is A
 
 ## Project status
 
-This repository contains the initial application and reproducible training pipeline. **No model has been trained and no accuracy claim is made yet.** You must obtain datasets, review their licenses, train/evaluate the models, and place selected weights in `artifacts/`.
+This repository contains the application and reproducible training pipeline. A trained checkpoint is not included in Git; place your locally trained weights in `artifacts/` before running inference or evaluation. Report measured results for the exact checkpoint and test split used. Do not treat benchmark accuracy as proof of authenticity or assume it generalizes to every real-world image.
 
 ## Planned experiments
 
