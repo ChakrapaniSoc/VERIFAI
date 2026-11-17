@@ -1,7 +1,7 @@
 import { isAnalysisResponse, isRecord, type AnalysisResponse } from "../types/analysis";
 
 export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-export const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 40_000_000;
 
 const MIME_SIGNATURES: ReadonlyArray<{
@@ -47,15 +47,15 @@ export async function validateImageFile(file: File): Promise<void> {
     throw new Error("This file is empty. Choose an image to continue.");
   }
   if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("Images must be 12 MB or smaller.");
+    throw new Error("Images must be 20 MB or smaller.");
   }
 
   const signature = new Uint8Array(await file.slice(0, 12).arrayBuffer());
   const detected = MIME_SIGNATURES.find(({ matches }) => matches(signature))?.mime;
   if (!detected) {
-    throw new Error("This file is not a supported JPEG, PNG, WEBP, or BMP image.");
+    throw new Error("This file is not a supported JPG/JPEG, PNG, WEBP, or BMP image.");
   }
-  if (file.type && file.type !== detected) {
+  if (file.type && file.type !== detected && !(detected === "image/jpeg" && file.type === "image/jpg")) {
     throw new Error("The file extension or type does not match its image content.");
   }
 
