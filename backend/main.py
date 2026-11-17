@@ -20,7 +20,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-MAX_BYTES = 12 * 1024 * 1024
+MAX_BYTES = 20 * 1024 * 1024
 MAX_IMAGE_PIXELS = 40_000_000
 SUPPORTED_IMAGE_TYPES = {
     "image/jpeg": "JPEG",
@@ -56,16 +56,14 @@ def get_detector():
 
 
 def decode_uploaded_image(data: bytes, content_type: str) -> Image.Image:
-    expected_format = SUPPORTED_IMAGE_TYPES.get(content_type)
-    if expected_format is None:
-        raise HTTPException(status_code=415, detail="Upload a JPEG, PNG, WEBP or BMP image.")
-
+    # Android/gallery clients may label JPG as image/jpg or omit the MIME type.
+    # Validate the actual decoded image format instead of trusting the request header.
     try:
         with Image.open(io.BytesIO(data)) as candidate:
-            if candidate.format != expected_format:
+            if candidate.format not in SUPPORTED_IMAGE_TYPES.values():
                 raise HTTPException(
                     status_code=415,
-                    detail="The uploaded image format does not match its content type.",
+                    detail="Upload a JPG/JPEG, PNG, WEBP or BMP image.",
                 )
             if candidate.width * candidate.height > MAX_IMAGE_PIXELS:
                 raise HTTPException(
@@ -97,7 +95,7 @@ async def analyze(file: UploadFile = File(...)):
     try:
         data = await file.read(MAX_BYTES + 1)
         if len(data) > MAX_BYTES:
-            raise HTTPException(status_code=413, detail="Image exceeds the 12 MB limit.")
+            raise HTTPException(status_code=413, detail="Image exceeds the 20 MB limit.")
         image = decode_uploaded_image(data, file.content_type or "")
         detector = get_detector()
         prediction = detector.predict(image)
