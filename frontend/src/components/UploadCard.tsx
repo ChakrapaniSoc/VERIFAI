@@ -121,7 +121,7 @@ export function UploadCard({
             </span>
             <strong>{isValidating ? "Checking your image…" : "Drop an image here"}</strong>
             <span>or browse from your device</span>
-            <span className="file-format-note">JPG, PNG, WEBP or BMP · up to 12 MB</span>
+            <span className="file-format-note">JPG/JPEG, PNG, WEBP or BMP · up to 20 MB</span>
           </div>
         )}
         <input
