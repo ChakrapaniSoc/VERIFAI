@@ -24,3 +24,5 @@ cifake_raw/
 train/
 test/
 
+# Private real-world evaluation images and local outputs
+real_world_test/
