@@ -87,6 +87,16 @@ python -m training.evaluate --data data --checkpoint artifacts/efficientnet_b0_b
 
 Keep test data untouched until model selection is complete. Report confidence intervals and generator-wise performance where possible.
 
+### Evaluate compression and resizing sensitivity
+
+Use the same held-out test directory and checkpoint as the baseline evaluation:
+
+```bash
+python -m training.robustness --data data/test --checkpoint artifacts/efficientnet_b0_best.pt
+```
+
+The script evaluates the original images plus JPEG quality 95, 85, 70 and 50, and downscale/upscale variants at 75% and 50%. It writes `reports/robustness_evaluation.json`, including accuracy, macro-F1, ROC-AUC, confusion matrices, the false-positive rate on real images, and the false-negative rate on AI-generated images. The expected test folders are named `ai_generated/` and `real/`. These measurements describe only the supplied test set and transformations; they do not validate performance on WhatsApp images or all real-world photographs.
+
 ## 5. Run the API
 
 ```bash
