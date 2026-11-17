@@ -1,15 +1,18 @@
 """Model loading and Grad-CAM inference."""
 from __future__ import annotations
-import os
+import base64
+import io
+import logging
 from pathlib import Path
+
 import torch
+from PIL import Image
 from torch import nn
 from torchvision import models, transforms
-from PIL import Image
-import io
 
 MODEL_NAMES = ("resnet50", "efficientnet_b0", "convnext_tiny")
 CLASS_NAMES = ("ai_generated", "real")
+logger = logging.getLogger(__name__)
 
 
 def build_model(name: str, pretrained: bool = False) -> nn.Module:
@@ -44,6 +47,22 @@ class Detector:
     def __init__(self, checkpoint: str):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         payload = torch.load(checkpoint, map_location=self.device, weights_only=False)
+        if not isinstance(payload, dict):
+            raise ValueError("Checkpoint must contain a dictionary.")
+        if payload.get("model_name") != "efficientnet_b0":
+            raise ValueError("Checkpoint must contain an EfficientNet-B0 model.")
+        if not isinstance(payload.get("state_dict"), dict):
+            raise ValueError("Checkpoint is missing a valid state_dict.")
+        classes = payload.get("classes")
+        class_to_idx = payload.get("class_to_idx")
+        if classes is not None and classes != list(CLASS_NAMES):
+            raise ValueError("Checkpoint classes do not match the VERIFAI class order.")
+        if class_to_idx is not None and class_to_idx != {
+            name: index for index, name in enumerate(CLASS_NAMES)
+        }:
+            raise ValueError("Checkpoint class mapping does not match the VERIFAI class order.")
+        if payload.get("image_size", 224) != 224:
+            raise ValueError("Checkpoint image_size must be 224.")
         self.name = payload["model_name"]
         self.model = build_model(self.name, pretrained=False)
         self.model.load_state_dict(payload["state_dict"])
@@ -63,6 +82,7 @@ class Detector:
         return {
             "label": CLASS_NAMES[idx],
             "probabilities": {"ai_generated": round(probs[0], 6), "real": round(probs[1], 6)},
+            "confidence": round(probs[idx], 6),
             "model": self.name,
             "device": str(self.device),
             "explanation": "Probabilities are model scores, not calibrated certainty or proof.",
@@ -70,19 +90,21 @@ class Detector:
 
     def gradcam(self, image: Image.Image) -> str | None:
         try:
-            from pytorch_grad_cam import GradCAM
-            from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-            from pytorch_grad_cam.utils.image import show_cam_on_image
-            import base64
-            import numpy as np
-            rgb = image.convert("RGB").resize((224, 224))
-            arr = np.asarray(rgb, dtype=np.float32) / 255.0
+            from training.gradcam import colorize_heatmap, compute_gradcam
+
+            rgb = image.convert("RGB")
             tensor = self.transform(rgb).unsqueeze(0).to(self.device)
-            with GradCAM(model=self.model, target_layers=[target_layer(self.model, self.name)]) as cam:
-                grayscale = cam(input_tensor=tensor, targets=[ClassifierOutputTarget(0)])[0]
-            overlay = show_cam_on_image(arr, grayscale, use_rgb=True)
+            cam, _predicted_index, _confidence = compute_gradcam(
+                self.model,
+                tensor,
+                target_layer(self.model, self.name),
+                self.device,
+            )
+            heatmap = colorize_heatmap(cam, rgb.size)
+            overlay = Image.blend(rgb, heatmap, alpha=0.4)
             out = io.BytesIO()
-            Image.fromarray(overlay).save(out, format="PNG")
+            overlay.save(out, format="PNG")
             return base64.b64encode(out.getvalue()).decode("ascii")
         except Exception:
+            logger.exception("Grad-CAM generation failed.")
             return None

@@ -71,6 +71,14 @@ python -m training.train --data data --model convnext_tiny --epochs 12 --batch-s
 
 The script saves the best validation checkpoint under `artifacts/`. These are starting hyperparameters; tune them using validation data only. For a 6 GB GPU, reduce batch size or image size if CUDA runs out of memory.
 
+To resume from the latest completed epoch, use the matching model and dataset:
+
+```bash
+python -m training.train --data data --model efficientnet_b0 --epochs 12 --resume artifacts/efficientnet_b0_last.pt
+```
+
+The last checkpoint and training history are updated after every completed epoch. Increase `--epochs` when resuming to extend the run.
+
 ## 4. Evaluate held-out test data
 
 ```bash

@@ -16,3 +16,11 @@ frontend/dist/
 *.pt
 *.pth
 *.onnx
+
+archive.zip
+cifake_raw/
+
+
+train/
+test/
+

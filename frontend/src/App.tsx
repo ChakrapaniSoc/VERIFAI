@@ -1,10 +1,139 @@
-import { useState } from "react";
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
-type Result = { filename:string; prediction:{label:string;probabilities:{ai_generated:number;real:number};model:string;explanation:string}; explainability:{gradcam_png_base64:string|null;note:string}; forensics:{metadata:Record<string,unknown>;frequency:Record<string,unknown>;provenance:Record<string,unknown>};limitations:string[] };
-export default function App(){
- const [file,setFile]=useState<File|null>(null),[preview,setPreview]=useState(""),[result,setResult]=useState<Result|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
- async function analyze(){if(!file)return;setBusy(true);setError("");setResult(null);try{const body=new FormData();body.append("file",file);const res=await fetch(API+"/api/analyze",{method:"POST",body});const data=await res.json();if(!res.ok)throw new Error(data.detail||"Analysis failed");setResult(data);}catch(e){setError(e instanceof Error?e.message:"Could not reach VERIFAI API");}finally{setBusy(false);}}
- return <main className="shell"><nav><div className="brand"><span className="mark">V</span> VERIFAI</div><span className="navtag">IMAGE FORENSICS · RESEARCH PREVIEW</span></nav><section className="hero"><p className="eyebrow">DIGITAL TRUST / EXPLAINABLE AI</p><h1>Look closer.<br/><em>Understand the image.</em></h1><p className="intro">An explainable screening tool that combines a fine-tuned deep-learning classifier with visual and forensic indicators.</p></section>
- <section className="workspace"><div className="upload card"><div className="sectionhead"><span>01 / INPUT</span><span>JPG · PNG · WEBP · BMP</span></div><label className="drop">{preview?<img src={preview} alt="Selected upload"/>:<><div className="uploadicon">↥</div><strong>Choose an image to investigate</strong><small>Local image · maximum 12 MB</small></>}<input type="file" accept="image/jpeg,image/png,image/webp,image/bmp" onChange={e=>{const f=e.target.files?.[0];setFile(f||null);setResult(null);if(f)setPreview(URL.createObjectURL(f));}}/></label><button disabled={!file||busy} onClick={analyze}>{busy?"ANALYZING…":"ANALYZE IMAGE ↗"}</button>{error&&<p className="error">{error}</p>}<p className="privacy">Your image is processed by the API and is not stored by this starter application.</p></div>
- <div className="results card"><div className="sectionhead"><span>02 / ANALYSIS</span><span>{result?"COMPLETE":"AWAITING IMAGE"}</span></div>{!result?<div className="empty"><div>◎</div><strong>Analysis will appear here</strong><small>Upload an image to see model scores, Grad-CAM and forensic indicators.</small></div>:<><div className="verdict"><span className="eyebrow">MODEL ASSESSMENT</span><h2>{result.prediction.label.replace("_"," ")}</h2><p>{result.prediction.explanation}</p><div className="scores"><div><small>AI-GENERATED</small><b>{(result.prediction.probabilities.ai_generated*100).toFixed(1)}%</b></div><div><small>REAL</small><b>{(result.prediction.probabilities.real*100).toFixed(1)}%</b></div></div></div><div className="explain"><h3>MODEL ATTENTION / GRAD-CAM</h3>{result.explainability.gradcam_png_base64?<img src={"data:image/png;base64,"+result.explainability.gradcam_png_base64} alt="Grad-CAM overlay"/>:<p>Heatmap unavailable for this request.</p>}<small>{result.explainability.note}</small></div><div className="forensics"><h3>FORENSIC INDICATORS</h3><pre>{JSON.stringify(result.forensics,null,2)}</pre></div><div className="limitations"><h3>READ BEFORE USING</h3>{result.limitations.map(x=><p key={x}>• {x}</p>)}</div></>}</div></section><footer><span>VERIFAI / EXPLAINABLE IMAGE SCREENING</span><span>NOT A DETERMINATION OF AUTHENTICITY</span></footer></main>
+import { useCallback, useEffect, useState } from "react";
+import { ArrowUpRight, CircleCheck, Info } from "lucide-react";
+import { AIInsightsCard } from "./components/AIInsightsCard";
+import { AnalysisResultCard } from "./components/AnalysisResultCard";
+import { DashboardHeader, type ApiStatus } from "./components/DashboardHeader";
+import { DownloadReportButton } from "./components/DownloadReportButton";
+import { ForensicsCard } from "./components/ForensicsCard";
+import { GradCamCard } from "./components/GradCamCard";
+import { LimitationsCard } from "./components/LimitationsCard";
+import { Sidebar } from "./components/Sidebar";
+import { UploadCard } from "./components/UploadCard";
+import { analyzeImage, checkApiHealth } from "./services/api";
+import type { AnalysisResponse } from "./types/analysis";
+
+const SECTIONS = ["home", "about", "features", "analytics", "help"];
+
+export default function App() {
+  const [file, setFile] = useState<File | null>(null);
+  const [result, setResult] = useState<AnalysisResponse | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
+  const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
+  const [activeSection, setActiveSection] = useState("home");
+
+  const refreshApiStatus = useCallback(async (signal?: AbortSignal) => {
+    try {
+      await checkApiHealth(signal);
+      setApiStatus("connected");
+    } catch {
+      if (!signal?.aborted) setApiStatus("offline");
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void refreshApiStatus(controller.signal);
+    const interval = window.setInterval(() => void refreshApiStatus(), 30_000);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [refreshApiStatus]);
+
+  useEffect(() => {
+    const elements = SECTIONS.map((section) => document.getElementById(section)).filter(
+      (element): element is HTMLElement => element !== null,
+    );
+    if (!("IntersectionObserver" in window) || elements.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (window.scrollY < 120) {
+          setActiveSection("home");
+          return;
+        }
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+        if (visible) setActiveSection(visible.target.id);
+      },
+      { rootMargin: "-15% 0px -65% 0px", threshold: [0, 0.1, 0.25, 0.5] },
+    );
+    elements.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, []);
+
+  const handleFileSelected = useCallback((selected: File | null) => {
+    setFile(selected);
+    setResult(null);
+    setAnalysisError("");
+  }, []);
+
+  const handleAnalyze = useCallback(async () => {
+    if (!file || isAnalyzing) return;
+    setIsAnalyzing(true);
+    setAnalysisError("");
+    setResult(null);
+    try {
+      const analysis = await analyzeImage(file);
+      setResult(analysis);
+      setApiStatus("connected");
+    } catch (error) {
+      setAnalysisError(error instanceof Error ? error.message : "Analysis failed. Please try again.");
+      void refreshApiStatus();
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [file, isAnalyzing, refreshApiStatus]);
+
+  return (
+    <div className="app-shell">
+      <Sidebar activeSection={activeSection} onNavigate={setActiveSection} />
+      <main className="main-content">
+        <div className="content-shell">
+          <DashboardHeader apiStatus={apiStatus} />
+
+          <section className="welcome-strip" id="about">
+            <div className="welcome-copy">
+              <span className="welcome-icon"><Info size={17} aria-hidden="true" /></span>
+              <p>
+                <strong>A clearer view of image signals.</strong>
+                Review the model’s assessment alongside explainability and returned forensic context.
+              </p>
+            </div>
+            <span className="welcome-tag">AI + FORENSICS</span>
+          </section>
+
+          <div className="dashboard-grid">
+            <UploadCard
+              file={file}
+              isAnalyzing={isAnalyzing}
+              analysisError={analysisError}
+              onFileSelected={handleFileSelected}
+              onAnalyze={() => void handleAnalyze()}
+            />
+            <AnalysisResultCard result={result} isLoading={isAnalyzing} />
+            <GradCamCard result={result} isLoading={isAnalyzing} />
+            <ForensicsCard result={result} />
+            <AIInsightsCard result={result} />
+            <LimitationsCard result={result} />
+          </div>
+
+          <footer className="dashboard-footer">
+            <span>VERIFAI <i>·</i> EXPLAINABLE IMAGE SCREENING</span>
+            {result && <DownloadReportButton result={result} />}
+            <span className="footer-note">
+              Results are screening estimates <ArrowUpRight size={13} aria-hidden="true" />
+            </span>
+          </footer>
+          {result && (
+            <p className="sr-only" role="status" aria-live="polite">
+              <CircleCheck size={14} aria-hidden="true" /> Analysis complete.
+            </p>
+          )}
+        </div>
+      </main>
+    </div>
+  );
 }
