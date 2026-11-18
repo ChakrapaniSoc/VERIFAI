@@ -508,9 +508,20 @@ a {
   font-size: 9px !important;
 }
 
-.browse-button {
-  min-height: 31px;
+.upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
   margin: 0 0 13px;
+}
+
+.browse-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 0 13px;
   color: #6348cb;
   border: 1px solid #ded8fb;
@@ -519,6 +530,16 @@ a {
   font-size: 10px;
   font-weight: 680;
   transition: background 150ms ease, border-color 150ms ease;
+}
+
+.camera-button {
+  color: #376dbd;
+  border-color: #d7e4fa;
+}
+
+.camera-button:hover:not(:disabled) {
+  border-color: #a9c5ee;
+  background: #f4f8ff;
 }
 
 .browse-button:hover:not(:disabled) {
