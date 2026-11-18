@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { FileImage, ImagePlus, LoaderCircle, UploadCloud } from "lucide-react";
+import { Camera, FileImage, ImagePlus, LoaderCircle, UploadCloud } from "lucide-react";
 import { MAX_IMAGE_BYTES, validateImageFile } from "../services/api";
 
 interface UploadCardProps {
@@ -20,6 +20,7 @@ export function UploadCard({
   onAnalyze,
 }: UploadCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const selectionSequence = useRef(0);
   const [previewUrl, setPreviewUrl] = useState("");
   const [fileError, setFileError] = useState("");
@@ -135,14 +136,38 @@ export function UploadCard({
             event.currentTarget.value = "";
           }}
         />
-        <button
-          className="browse-button"
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={isValidating || isAnalyzing}
-        >
-          Browse files
-        </button>
+        <input
+          ref={cameraInputRef}
+          className="file-input-hidden"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          aria-label="Take a photo with your camera"
+          onChange={(event) => {
+            void handleFile(event.currentTarget.files?.[0]);
+            event.currentTarget.value = "";
+          }}
+        />
+        <div className="upload-actions">
+          <button
+            className="browse-button"
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={isValidating || isAnalyzing}
+          >
+            <ImagePlus size={14} aria-hidden="true" />
+            Browse files
+          </button>
+          <button
+            className="browse-button camera-button"
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={isValidating || isAnalyzing}
+          >
+            <Camera size={14} aria-hidden="true" />
+            Take photo
+          </button>
+        </div>
       </div>
 
       {(fileError || analysisError) && (
